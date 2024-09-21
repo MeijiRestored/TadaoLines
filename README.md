@@ -11,5 +11,5 @@ View it at https://tadaolines.hainaut.xyz.
 
 - Lines on map
 - Bus stop information
+- Filters
 - Data from OSM using [Private.coffee](https://overpass.private.coffee) Overpass instance.
-

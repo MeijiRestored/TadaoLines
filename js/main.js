@@ -35,8 +35,10 @@ axios.get(overpassUrl).then(response => {
 
   const initialIconSize = 16;
 
+  let stopsLayerGroup = L.layerGroup();
+
   const markers = Object.values(nodes).map(node => {
-    const stopName = node.tags.name || 'Unknown';
+    const stopName = node.tags.name || 'Inconnu';
     const connectedRoutes = new Set();
 
     Object.values(routes).forEach(route => {
@@ -50,7 +52,7 @@ axios.get(overpassUrl).then(response => {
     const uniqueConnectedRoutes = Array.from(connectedRoutes);
 
     const popupContent = `<b>${stopName}</b><br><br>Lignes: ${uniqueConnectedRoutes.join(' ')}`;
-    return L.marker([node.lat, node.lon], {icon: createMarkerIcon(initialIconSize)}).addTo(map).bindPopup(popupContent);
+    return L.marker([node.lat, node.lon], {icon: createMarkerIcon(initialIconSize)}).addTo(stopsLayerGroup).bindPopup(popupContent);
   });
 
   function updateMarkerIcons() {
@@ -66,32 +68,60 @@ axios.get(overpassUrl).then(response => {
 
   updateMarkerIcons();
 
-  Object.values(routes).forEach(route => {
-    route.members.forEach(member => {
-      if (member.type === "way" && member.role === "" && !route.tags.ref.startsWith("B")) {
-        L.polyline(member.geometry, {color: route.tags.colour, weight: 4}).addTo(map);
-      }
-    });
-  });
+  let navLinesGroup = L.layerGroup();
+  let duoLinesGroup = L.layerGroup();
+  let complementaryLinesGroup = L.layerGroup();
+  let principalLinesGroup = L.layerGroup();
+  let bulleLinesGroup = L.layerGroup();
 
-  Object.values(routes).forEach(route => {
-    route.members.forEach(member => {
-      console.log(route.tags);
-      if (member.type === "way" && member.role === "" && route.tags.ref.startsWith("B") && (!route.tags.note || !route.tags.note.includes("alternatif"))) {
-        L.polyline(member.geometry, {color: "#FFFFFF", weight: 10}).addTo(map);
-      }
+  function drawPolyline(routes, group, filterFn, lineStyleFn) {
+    Object.values(routes).forEach(route => {
+      route.members.forEach(member => {
+        if (member.type === "way" && member.role === "" && filterFn(route, member)) {
+          const style = lineStyleFn(route, member);
+          L.polyline(member.geometry, style).addTo(group);
+        }
+      });
     });
-  });
+  }
 
-  Object.values(routes).forEach(route => {
-    route.members.forEach(member => {
-      if (member.type === "way" && member.role === "" && route.tags.ref.startsWith("B")) {
-        L.polyline(member.geometry, {color: route.tags.colour, weight: (!route.tags.note || !route.tags.note.includes("alternatif")) ? 6 : 3}).addTo(map);
-      }
-    });
-  });
+  const isNavLine = (route) => route.tags.ref.startsWith("Nav") || route.tags.ref.startsWith("Allo");
+  const isDuoLine = (route) => !route.tags.ref.startsWith("B") && !route.tags.ref.startsWith("Nav") && !route.tags.ref.startsWith("Allo") && parseInt(route.tags.ref) >= 50;
+  const isComplementaryLine = (route) => !route.tags.ref.startsWith("B") && !route.tags.ref.startsWith("Nav") && !route.tags.ref.startsWith("Allo") && parseInt(route.tags.ref) <= 49 && parseInt(route.tags.ref) >= 20;
+  const isPrincipalLine = (route) => !route.tags.ref.startsWith("B") && !route.tags.ref.startsWith("Nav") && !route.tags.ref.startsWith("Allo") && parseInt(route.tags.ref) <= 19 && parseInt(route.tags.ref) >= 10;
+  const isBulleBaseLine = (route) => route.tags.ref.startsWith("B") && (!route.tags.note || !route.tags.note.includes("alternatif"));
+  const isBulleLine = (route) => route.tags.ref.startsWith("B");
+
+  const navLineStyle = (route) => ({ color: route.tags.colour, weight: 3 });
+  const regularLineStyle = (route) => ({ color: route.tags.colour, weight: 4 });
+  const bulleBaseLineStyle = () => ({ color: "#FFFFFF", weight: 10 });
+  const bulleLineStyle = (route) => ({ color: route.tags.colour, weight: (!route.tags.note || !route.tags.note.includes("alternatif")) ? 6 : 3 });
+
+  drawPolyline(routes, navLinesGroup, isNavLine, navLineStyle);
+  drawPolyline(routes, duoLinesGroup, isDuoLine, regularLineStyle);
+  drawPolyline(routes, complementaryLinesGroup, isComplementaryLine, regularLineStyle);
+  drawPolyline(routes, principalLinesGroup, isPrincipalLine, regularLineStyle);
+  drawPolyline(routes, bulleLinesGroup, isBulleBaseLine, bulleBaseLineStyle);
+  drawPolyline(routes, bulleLinesGroup, isBulleLine, bulleLineStyle);
+
+
+  stopsLayerGroup.addTo(map);
+  navLinesGroup.addTo(map);
+  duoLinesGroup.addTo(map);
+  complementaryLinesGroup.addTo(map);
+  principalLinesGroup.addTo(map);
+  bulleLinesGroup.addTo(map);
+
+  L.control.layers(null, {
+    "Arrets": stopsLayerGroup,
+    "Navettes": navLinesGroup,
+    "Lignes duo": duoLinesGroup,
+    "Lignes complementaires": complementaryLinesGroup,
+    "Lignes principales": principalLinesGroup,
+    "Bulles": bulleLinesGroup
+  }).addTo(map);
 
 
 }).catch(error => {
-  console.error('Error fetching data from Overpass API', error);
+  console.error('Erreur de téléchargement des données depuis Overpass API', error);
 });
