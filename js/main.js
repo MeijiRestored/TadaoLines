@@ -11,6 +11,9 @@ const overpassUrl = 'https://overpass.private.coffee/api/interpreter?data=[out:j
 axios.get(overpassUrl).then(response => {
   const data = response.data;
 
+  const loadingMessage = document.getElementById('loading-message');
+  loadingMessage.style.display = 'none';
+
   const nodes = {};
   const ways = {};
   const routes = {};
@@ -68,36 +71,6 @@ axios.get(overpassUrl).then(response => {
 
   updateMarkerIcons();
 
-  let navLinesGroup = L.layerGroup();
-  let duoLinesGroup = L.layerGroup();
-  let complementaryLinesGroup = L.layerGroup();
-  let principalLinesGroup = L.layerGroup();
-  let bulleLinesGroup = L.layerGroup();
-
-
-  function drawPolyline(routes, group, filterFn, lineStyleFn) {
-    Object.values(routes).forEach(route => {
-      if (filterFn(route)) {
-        let geom = [];
-        route.members.forEach(member => {
-          if (member.type === "way" && member.role === "") {
-            geom.push(member.geometry);
-          }
-        });
-
-        const style = lineStyleFn(route);
-        L.polyline(geom, style).addTo(group);
-      }
-    });
-  }
-
-  const isNavLine = (route) => route.tags.ref.startsWith("Nav") || route.tags.ref.startsWith("Allo");
-  const isDuoLine = (route) => !route.tags.ref.startsWith("B") && !route.tags.ref.startsWith("Nav") && !route.tags.ref.startsWith("Allo") && parseInt(route.tags.ref) >= 50;
-  const isComplementaryLine = (route) => !route.tags.ref.startsWith("B") && !route.tags.ref.startsWith("Nav") && !route.tags.ref.startsWith("Allo") && parseInt(route.tags.ref) <= 49 && parseInt(route.tags.ref) >= 20;
-  const isPrincipalLine = (route) => !route.tags.ref.startsWith("B") && !route.tags.ref.startsWith("Nav") && !route.tags.ref.startsWith("Allo") && parseInt(route.tags.ref) <= 19 && parseInt(route.tags.ref) >= 10;
-  const isBulleBaseLine = (route) => route.tags.ref.startsWith("B") && (!route.tags.note || !route.tags.note.includes("alternatif"));
-  const isBulleLine = (route) => route.tags.ref.startsWith("B");
-
   const navLineStyle = (route) => ({color: route.tags.colour, weight: 3});
   const regularLineStyle = (route) => ({
     color: route.tags.colour,
@@ -111,31 +84,153 @@ axios.get(overpassUrl).then(response => {
     dashArray: (!route.tags.note || !route.tags.note.includes("alternatif")) ? '1' : '10, 10'
   });
 
-  drawPolyline(routes, navLinesGroup, isNavLine, navLineStyle);
-  drawPolyline(routes, duoLinesGroup, isDuoLine, regularLineStyle);
-  drawPolyline(routes, complementaryLinesGroup, isComplementaryLine, regularLineStyle);
-  drawPolyline(routes, principalLinesGroup, isPrincipalLine, regularLineStyle);
-  drawPolyline(routes, bulleLinesGroup, isBulleBaseLine, bulleBaseLineStyle);
-  drawPolyline(routes, bulleLinesGroup, isBulleLine, bulleLineStyle);
+  let lineLayers = {};
+  let routeMapping = {};
+  let lineVisibility = {};
 
+  function extractNumericRef(route) {
+    const ref = route.tags.ref;
+
+    if (ref.startsWith("B")) {
+      const numericRef = parseInt(ref.substring(1));
+      return isNaN(numericRef) ? 999 : numericRef;
+    }
+
+    const numericRef = parseInt(ref.replace(/\D/g, ''));
+
+    if (!isNaN(numericRef)) {
+      return numericRef;
+    }
+
+    const altRef = route.tags.alt_ref ? parseInt(route.tags.alt_ref) : 999;
+    return isNaN(altRef) ? 999 : altRef;
+  }
+
+  function drawPolyline(routes) {
+    Object.values(routes).forEach(route => {
+      const ref = route.tags.ref;
+
+      if (!lineLayers[ref]) {
+        lineLayers[ref] = L.layerGroup();
+      }
+
+      routeMapping[ref] = route;
+      lineVisibility[ref] = true;
+
+      let geom = [];
+      route.members.forEach(member => {
+        if (member.type === "way" && member.role === "") {
+          geom.push(member.geometry);
+        }
+      });
+
+      let style;
+      if (ref.startsWith("Nav") || ref.startsWith("Allo")) {
+        style = navLineStyle(route);
+      } else if (!ref.startsWith("B") && parseInt(ref) >= 50) {
+        style = regularLineStyle(route);
+      } else if (!ref.startsWith("B") && parseInt(ref) <= 49 && parseInt(ref) >= 20) {
+        style = regularLineStyle(route);
+      } else if (!ref.startsWith("B") && parseInt(ref) <= 19 && parseInt(ref) >= 10) {
+        style = regularLineStyle(route);
+      } else if (ref.startsWith("B") && (!route.tags.note || !route.tags.note.includes("alternatif"))) {
+        style = bulleBaseLineStyle(route);
+        L.polyline(geom, style).addTo(lineLayers[ref]);
+        style = bulleLineStyle(route);
+      } else if (ref.startsWith("B")) {
+        style = bulleLineStyle(route);
+      }
+
+      L.polyline(geom, style).addTo(lineLayers[ref]);
+    });
+  }
+
+  drawPolyline(routes);
+
+  const layerControlDiv = document.getElementById('layer-control');
+  Object.keys(lineLayers)
+    .sort((a, b) => {
+      const aIsB = a.startsWith('B');
+      const bIsB = b.startsWith('B');
+
+      if (aIsB && bIsB) {
+        return extractNumericRef(routeMapping[a]) - extractNumericRef(routeMapping[b]);
+      }
+
+      if (aIsB) return -1;
+      if (bIsB) return 1;
+
+      return extractNumericRef(routeMapping[b]) + extractNumericRef(routeMapping[a]);
+    })
+    .forEach(ref => {
+      const route = routeMapping[ref];
+      const lineItem = document.createElement('div');
+      lineItem.className = 'layer-item';
+      lineItem.innerHTML = `
+      <input type="checkbox" id="${ref}" checked />
+      <span class="linenumber" style="background-color: ${route.tags.colour};">${route.tags.ref}</span>
+    `;
+
+      lineItem.querySelector('input').addEventListener('click', function () {
+        toggleLineVisibility(ref);
+      });
+
+      layerControlDiv.appendChild(lineItem);
+    });
 
   stopsLayerGroup.addTo(map);
-  navLinesGroup.addTo(map);
-  duoLinesGroup.addTo(map);
-  complementaryLinesGroup.addTo(map);
-  principalLinesGroup.addTo(map);
-  bulleLinesGroup.addTo(map);
 
-  L.control.layers(null, {
-    "Arrets": stopsLayerGroup,
-    "Navettes": navLinesGroup,
-    "Lignes duo": duoLinesGroup,
-    "Lignes complementaires": complementaryLinesGroup,
-    "Lignes principales": principalLinesGroup,
-    "Bulles": bulleLinesGroup
-  }).addTo(map);
+  function renderLines() {
+    Object.keys(lineLayers).forEach(ref => {
+      map.removeLayer(lineLayers[ref]);
+    });
 
+    Object.keys(lineLayers)
+      .filter(ref => lineVisibility[ref])
+      .sort((a, b) => extractNumericRef(routeMapping[b]) - extractNumericRef(routeMapping[a]))
+      .forEach(ref => lineLayers[ref].addTo(map));
+  }
 
+  renderLines();
+
+  function showAllLayers() {
+    Object.keys(lineLayers).forEach(ref => {
+      lineVisibility[ref] = true;
+    });
+    renderLines();
+    const checkboxes = document.querySelectorAll('#layer-control input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+      checkbox.checked = true;
+    });
+  }
+
+  function hideAllLayers() {
+    Object.keys(lineLayers).forEach(ref => {
+      lineVisibility[ref] = false;
+    });
+    renderLines();
+    const checkboxes = document.querySelectorAll('#layer-control input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+      checkbox.checked = false;
+    });
+  }
+
+  function toggleLineVisibility(ref) {
+    lineVisibility[ref] = !lineVisibility[ref];
+    renderLines();
+  }
+
+  function toggleStopsVisibility() {
+    if (map.hasLayer(stopsLayerGroup)) {
+      map.removeLayer(stopsLayerGroup);
+    } else {
+      stopsLayerGroup.addTo(map);
+    }
+  }
+
+  document.getElementById('show-all').addEventListener('click', showAllLayers);
+  document.getElementById('hide-all').addEventListener('click', hideAllLayers);
+  document.getElementById('toggle-stops').addEventListener('click', toggleStopsVisibility);
 }).catch(error => {
   console.error('Erreur de téléchargement des données depuis Overpass API', error);
 });

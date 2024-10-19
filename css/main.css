@@ -10,3 +10,86 @@ body {
   height: 100%;
   width: 100%;
 }
+
+#sidebar {
+  width: 250px;
+  height: 100vh;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1831;
+  background: white;
+  padding: 10px;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.5);
+  overflow-y: auto;
+  max-height: calc(100vh - 20px);
+}
+
+h1 {
+  width: 100%;
+  text-align: center;
+}
+
+.layer-item {
+  margin: 5px 0;
+  padding: 5px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.layer-item input {
+  margin-right: 10px;
+}
+
+.linenumber {
+  color: #ffffff;
+  padding: 6px;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 16pt;
+}
+
+#button-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+button {
+  margin: 5px;
+  padding: 8px 15px;
+  border: none;
+  border-radius: 5px;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.3s, transform 0.2s;
+}
+
+#show-all {
+  background-color: #4CAF50;
+}
+
+#hide-all {
+  background-color: #f44336;
+}
+
+#toggle-stops {
+  background-color: #2196F3;
+}
+
+#show-all:hover {
+  background-color: #45a049;
+}
+
+#hide-all:hover {
+  background-color: #d32f2f;
+}
+
+#toggle-stops:hover {
+  background-color: #1976D2;
+}
+
+#loading-message {
+  text-align: center;
+}
