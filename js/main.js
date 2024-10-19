@@ -74,14 +74,20 @@ axios.get(overpassUrl).then(response => {
   let principalLinesGroup = L.layerGroup();
   let bulleLinesGroup = L.layerGroup();
 
+
   function drawPolyline(routes, group, filterFn, lineStyleFn) {
     Object.values(routes).forEach(route => {
-      route.members.forEach(member => {
-        if (member.type === "way" && member.role === "" && filterFn(route, member)) {
-          const style = lineStyleFn(route, member);
-          L.polyline(member.geometry, style).addTo(group);
-        }
-      });
+      if (filterFn(route)) {
+        let geom = [];
+        route.members.forEach(member => {
+          if (member.type === "way" && member.role === "") {
+            geom.push(member.geometry);
+          }
+        });
+
+        const style = lineStyleFn(route);
+        L.polyline(geom, style).addTo(group);
+      }
     });
   }
 
@@ -92,10 +98,18 @@ axios.get(overpassUrl).then(response => {
   const isBulleBaseLine = (route) => route.tags.ref.startsWith("B") && (!route.tags.note || !route.tags.note.includes("alternatif"));
   const isBulleLine = (route) => route.tags.ref.startsWith("B");
 
-  const navLineStyle = (route) => ({ color: route.tags.colour, weight: 3 });
-  const regularLineStyle = (route) => ({ color: route.tags.colour, weight: (!route.tags.note || !route.tags.note.includes("alternatif")) ? 4 : 3 });
-  const bulleBaseLineStyle = () => ({ color: "#FFFFFF", weight: 10 });
-  const bulleLineStyle = (route) => ({ color: route.tags.colour, weight: (!route.tags.note || !route.tags.note.includes("alternatif")) ? 6 : 3 });
+  const navLineStyle = (route) => ({color: route.tags.colour, weight: 3});
+  const regularLineStyle = (route) => ({
+    color: route.tags.colour,
+    weight: (!route.tags.note || !route.tags.note.includes("alternatif")) ? 4 : 3,
+    dashArray: (!route.tags.note || !route.tags.note.includes("alternatif")) ? '1' : '10, 10'
+  });
+  const bulleBaseLineStyle = () => ({color: "#FFFFFF", weight: 10});
+  const bulleLineStyle = (route) => ({
+    color: route.tags.colour,
+    weight: (!route.tags.note || !route.tags.note.includes("alternatif")) ? 6 : 3,
+    dashArray: (!route.tags.note || !route.tags.note.includes("alternatif")) ? '1' : '10, 10'
+  });
 
   drawPolyline(routes, navLinesGroup, isNavLine, navLineStyle);
   drawPolyline(routes, duoLinesGroup, isDuoLine, regularLineStyle);
