@@ -93,7 +93,7 @@ axios.get(overpassUrl).then(response => {
   const isBulleLine = (route) => route.tags.ref.startsWith("B");
 
   const navLineStyle = (route) => ({ color: route.tags.colour, weight: 3 });
-  const regularLineStyle = (route) => ({ color: route.tags.colour, weight: 4 });
+  const regularLineStyle = (route) => ({ color: route.tags.colour, weight: (!route.tags.note || !route.tags.note.includes("alternatif")) ? 4 : 3 });
   const bulleBaseLineStyle = () => ({ color: "#FFFFFF", weight: 10 });
   const bulleLineStyle = (route) => ({ color: route.tags.colour, weight: (!route.tags.note || !route.tags.note.includes("alternatif")) ? 6 : 3 });
 
